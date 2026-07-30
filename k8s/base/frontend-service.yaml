@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aegis-frontend
+  namespace: aegis
+spec:
+  type: ClusterIP
+  selector:
+    app: aegis-frontend
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP

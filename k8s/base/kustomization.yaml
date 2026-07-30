@@ -1,0 +1,25 @@
+# ============================================================================
+# Aegis AI — Kubernetes Base Manifests (Kustomize)
+# ============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: aegis
+
+resources:
+  - namespace.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - worker-deployment.yaml
+  - ingress.yaml
+
+configMapGenerator:
+  - name: aegis-config
+    literals:
+      - APP_ENV=production
+      - APP_LOG_LEVEL=INFO
+      - REDIS_HOST=redis.aegis.svc.cluster.local
+      - KAFKA_BOOTSTRAP_SERVERS=kafka.aegis.svc.cluster.local:9092
