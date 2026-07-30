@@ -1,6 +1,6 @@
 # Aegis AI — Enterprise AI Operations Platform
 
-[![CI/CD](https://github.com/aegis-ai/platform/actions/workflows/ci.yml/badge.svg)](https://github.com/aegis-ai/platform/actions)
+[![CI/CD](https://github.com/sudeepsagar123/Aegis-AI-Enterprise-AI-Operations-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/sudeepsagar123/Aegis-AI-Enterprise-AI-Operations-Platform/actions)
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Node 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org/)
