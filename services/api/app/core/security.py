@@ -30,7 +30,7 @@ from app.domain.enums import Permission, Role, ROLE_PERMISSIONS
 logger = get_logger(__name__)
 
 # Password hashing context using bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False)
 
 # Bearer token security scheme
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -62,14 +62,21 @@ class TokenPair(BaseModel):
 # ── Password Utilities ───────────────────────────────────────────────────────
 
 
+import bcrypt
+
+
 def hash_password(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
-    return pwd_context.hash(password)
+    pw_bytes = password.encode("utf-8")[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pw_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against its bcrypt hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    pw_bytes = plain_password.encode("utf-8")[:72]
+    hash_bytes = hashed_password.encode("utf-8")
+    return bcrypt.checkpw(pw_bytes, hash_bytes)
 
 
 # ── JWT Token Operations ─────────────────────────────────────────────────────

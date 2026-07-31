@@ -17,13 +17,34 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean, DateTime, Float, ForeignKey, Index, Integer,
-    String, Text, UniqueConstraint,
+    String, Text, UniqueConstraint, JSON,
 )
+from sqlalchemy.types import TypeDecorator
+
+class VectorType(TypeDecorator):
+    """Dialect-aware vector column (pgvector on PostgreSQL, JSON on SQLite)."""
+    impl = JSON
+    cache_ok = True
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            from pgvector.sqlalchemy import Vector
+            return dialect.type_descriptor(Vector(3072))
+        return dialect.type_descriptor(JSON())
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+class ArrayType(TypeDecorator):
+    """Dialect-aware array column (ARRAY on PostgreSQL, JSON on SQLite)."""
+    impl = JSON
+    cache_ok = True
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(ARRAY(String))
+        return dialect.type_descriptor(JSON())
+
+JSONType = JSON().with_variant(JSONB, "postgresql")
 
 from app.db.session import Base
 
@@ -63,7 +84,7 @@ class Organization(Base, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     plan: Mapped[str] = mapped_column(String(50), default="enterprise")
-    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    settings: Mapped[dict] = mapped_column(JSONType, default=dict)
     max_users: Mapped[int] = mapped_column(Integer, default=100)
 
     # Relationships
@@ -97,7 +118,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    preferences: Mapped[dict] = mapped_column(JSONB, default=dict)
+    preferences: Mapped[dict] = mapped_column(JSONType, default=dict)
 
     organization: Mapped[Organization] = relationship("Organization", back_populates="users")
     conversations: Mapped[list[Conversation]] = relationship("Conversation", back_populates="user")
@@ -125,7 +146,7 @@ class ApiKey(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     prefix: Mapped[str] = mapped_column(String(10), nullable=False)
-    scopes: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    scopes: Mapped[list[str]] = mapped_column(ArrayType(), default=list)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -169,10 +190,10 @@ class Incident(Base, TimestampMixin):
     impact: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Metadata
-    tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
-    labels: Mapped[dict] = mapped_column(JSONB, default=dict)
-    affected_services: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
-    external_refs: Mapped[dict] = mapped_column(JSONB, default=dict)  # Jira, PagerDuty, etc.
+    tags: Mapped[list[str]] = mapped_column(ArrayType(), default=list)
+    labels: Mapped[dict] = mapped_column(JSONType, default=dict)
+    affected_services: Mapped[list[str]] = mapped_column(ArrayType(), default=list)
+    external_refs: Mapped[dict] = mapped_column(JSONType, default=dict)  # Jira, PagerDuty, etc.
 
     # Relationships
     timeline_events: Mapped[list[IncidentEvent]] = relationship(
@@ -204,7 +225,7 @@ class IncidentEvent(Base, TimestampMixin):
     actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     actor_type: Mapped[str] = mapped_column(String(20), default="user")  # user, agent, system
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONType, default=dict)
 
     incident: Mapped[Incident] = relationship("Incident", back_populates="timeline_events")
 
@@ -225,8 +246,8 @@ class Conversation(Base, TimestampMixin, SoftDeleteMixin):
     title: Mapped[str] = mapped_column(String(500), default="New Conversation")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
-    tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONType, default=dict)
+    tags: Mapped[list[str]] = mapped_column(ArrayType(), default=list)
 
     # Optional link to incident
     incident_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -257,10 +278,10 @@ class Message(Base, TimestampMixin):
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
-    tool_calls: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    citations: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
-    feedback: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    tool_calls: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
+    citations: Mapped[list[dict] | None] = mapped_column(JSONType, nullable=True)
+    feedback: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONType, default=dict)
 
     conversation: Mapped[Conversation] = relationship("Conversation", back_populates="messages")
 
@@ -282,10 +303,10 @@ class AgentRun(Base, TimestampMixin):
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False)
     agent_type: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="pending")
-    input_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    output_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    input_data: Mapped[dict] = mapped_column(JSONType, default=dict)
+    output_data: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    plan: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    plan: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -312,8 +333,8 @@ class ToolExecution(Base, TimestampMixin):
         ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False,
     )
     tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    tool_input: Mapped[dict] = mapped_column(JSONB, default=dict)
-    tool_output: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    tool_input: Mapped[dict] = mapped_column(JSONType, default=dict)
+    tool_output: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -337,7 +358,7 @@ class ApprovalRequest(Base, TimestampMixin):
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False)
     action_type: Mapped[str] = mapped_column(String(100), nullable=False)
     action_description: Mapped[str] = mapped_column(Text, nullable=False)
-    action_payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    action_payload: Mapped[dict] = mapped_column(JSONType, default=dict)
     risk_level: Mapped[str] = mapped_column(String(20), default="medium")
     status: Mapped[str] = mapped_column(String(50), default="pending")
     decided_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -364,7 +385,7 @@ class Document(Base, TimestampMixin, SoftDeleteMixin):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONType, default=dict)
     processing_status: Mapped[str] = mapped_column(String(50), default="pending")
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -386,8 +407,8 @@ class DocumentChunk(Base, TimestampMixin):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, default=0)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(3072), nullable=True)
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    embedding: Mapped[list[float] | None] = mapped_column(VectorType(), nullable=True)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONType, default=dict)
 
     document: Mapped[Document] = relationship("Document", back_populates="chunks")
 
@@ -406,7 +427,7 @@ class Integration(Base, TimestampMixin):
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    config: Mapped[dict] = mapped_column(JSONType, default=dict)
     credentials_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
     health_check_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -431,8 +452,8 @@ class Workflow(Base, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict)
-    steps: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+    trigger_config: Mapped[dict] = mapped_column(JSONType, default=dict)
+    steps: Mapped[list[dict]] = mapped_column(JSONType, default=list)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     run_count: Mapped[int] = mapped_column(Integer, default=0)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -445,10 +466,10 @@ class WorkflowRun(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     workflow_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workflows.id"), nullable=False)
-    trigger_event: Mapped[dict] = mapped_column(JSONB, default=dict)
+    trigger_event: Mapped[dict] = mapped_column(JSONType, default=dict)
     status: Mapped[str] = mapped_column(String(50), default="running")
     current_step: Mapped[int] = mapped_column(Integer, default=0)
-    step_results: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+    step_results: Mapped[list[dict]] = mapped_column(JSONType, default=list)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -472,7 +493,7 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
     resource_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+    details: Mapped[dict] = mapped_column(JSONType, default=dict)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
@@ -494,12 +515,12 @@ class Memory(Base, TimestampMixin):
     user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     memory_type: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(3072), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(VectorType(), nullable=True)
     importance: Mapped[float] = mapped_column(Float, default=0.5)
     access_count: Mapped[int] = mapped_column(Integer, default=0)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONType, default=dict)
 
     __table_args__ = (
         Index("ix_memories_user", "user_id", "memory_type"),

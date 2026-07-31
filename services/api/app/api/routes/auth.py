@@ -57,7 +57,7 @@ async def register(request_body: RegisterRequest, request: Request, db: DbSessio
     user = await user_repo.create(
         org_id=org.id,
         email=request_body.email,
-        hashed_password=hash_password(request_body.password),
+        hashed_password=hash_password(request_body.password[:72]),
         full_name=request_body.full_name,
         role=Role.ORG_ADMIN.value,
     )

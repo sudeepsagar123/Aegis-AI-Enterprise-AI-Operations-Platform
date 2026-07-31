@@ -62,5 +62,10 @@ Thumbs.db
 *.key
 *.crt
 
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
 # MinIO data
 minio_data/

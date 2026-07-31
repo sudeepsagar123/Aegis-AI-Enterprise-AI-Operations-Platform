@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
+        if self.database_host.startswith("sqlite"):
+            return self.database_host
         return (
             f"postgresql+asyncpg://{self.database_user}:{self.database_password}"
             f"@{self.database_host}:{self.database_port}/{self.database_name}"
@@ -68,6 +70,8 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url_sync(self) -> str:
+        if self.database_host.startswith("sqlite"):
+            return self.database_host.replace("+asyncpg", "").replace("+aiosqlite", "")
         return (
             f"postgresql://{self.database_user}:{self.database_password}"
             f"@{self.database_host}:{self.database_port}/{self.database_name}"

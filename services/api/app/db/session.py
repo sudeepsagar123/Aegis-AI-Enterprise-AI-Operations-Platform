@@ -53,18 +53,27 @@ def create_engine(settings: Settings | None = None):
     if settings is None:
         settings = get_settings()
 
+    if "sqlite" in settings.database_url:
+        from sqlalchemy.pool import StaticPool
+        return create_async_engine(
+            settings.database_url,
+            poolclass=StaticPool,
+            connect_args={"check_same_thread": False},
+            echo=settings.app_debug and settings.is_development,
+        )
+
     return create_async_engine(
         settings.database_url,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         poolclass=AsyncAdaptedQueuePool,
         echo=settings.app_debug and settings.is_development,
-        pool_pre_ping=True,  # Verify connections before use
-        pool_recycle=3600,  # Recycle connections every hour
+        pool_pre_ping=True,
+        pool_recycle=3600,
         connect_args={
             "server_settings": {
                 "application_name": settings.app_name,
-                "jit": "off",  # Disable JIT for predictable latency
+                "jit": "off",
             }
         },
     )
