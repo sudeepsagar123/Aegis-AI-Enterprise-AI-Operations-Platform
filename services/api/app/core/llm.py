@@ -18,7 +18,13 @@ from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.chat_models import ChatOllama
+try:
+    from langchain_ollama import ChatOllama
+except ImportError:
+    try:
+        from langchain_community.chat_models.ollama import ChatOllama
+    except ImportError:
+        ChatOllama = None
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import Settings, get_settings
