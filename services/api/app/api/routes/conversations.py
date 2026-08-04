@@ -136,13 +136,35 @@ async def send_message(
         content=request.content,
     )
 
-    # In production, this would invoke the LangGraph agent pipeline.
-    # For now, we create a placeholder response.
+    # Invoke the LangGraph agent pipeline
+    from app.agents.orchestrator import agent_graph, OrchestratorState
+    from langchain_core.messages import HumanMessage as HMsg
+
+    initial_state: OrchestratorState = {
+        "messages": [HMsg(content=request.content)],
+        "plan": [],
+        "current_step": 0,
+        "step_results": [],
+        "needs_approval": False,
+        "approval_decision": None,
+        "context": [],
+        "entities": [],
+        "memories": [],
+        "final_response": "",
+        "metadata": {"conversation_id": str(conversation_id)},
+        "error": None,
+        "next_agent": "",
+    }
+
+    # Run the full agent graph
+    final_state = await agent_graph.ainvoke(initial_state)
+    agent_response = final_state.get("final_response", "Investigation complete. No additional findings.")
+
     assistant_msg = await msg_repo.create(
         conversation_id=conversation_id,
         role="assistant",
-        content="I'm processing your request. The full agent pipeline would execute here.",
-        model="gpt-4o",
+        content=agent_response,
+        model="aegis-agent-graph",
     )
 
     return MessageResponse(
@@ -179,57 +201,72 @@ async def stream_message(
     async def event_generator() -> AsyncGenerator[dict, None]:
         """
         Generate SSE events from the LangGraph agent execution.
-
-        In production, this connects to the agent orchestrator and
-        streams tokens, tool calls, and approval requests in real-time.
+        Streams agent reasoning, tool calls, and final report in real-time.
         """
         try:
+            from app.agents.orchestrator import agent_graph, OrchestratorState
+            from langchain_core.messages import HumanMessage as HMsg
+
             # Emit thinking indicator
             yield {
                 "event": "token",
-                "data": json.dumps({"content": "Analyzing your request", "done": False}),
+                "data": json.dumps({"content": "🔍 Initiating agent investigation...\n\n", "done": False}),
             }
 
-            # Simulate tool call
-            yield {
-                "event": "tool_call",
-                "data": json.dumps({
-                    "tool": "search_knowledge_base",
-                    "input": {"query": request.content},
-                }),
+            # Build initial state
+            initial_state: OrchestratorState = {
+                "messages": [HMsg(content=request.content)],
+                "plan": [],
+                "current_step": 0,
+                "step_results": [],
+                "needs_approval": False,
+                "approval_decision": None,
+                "context": [],
+                "entities": [],
+                "memories": [],
+                "final_response": "",
+                "metadata": {"conversation_id": str(conversation_id)},
+                "error": None,
+                "next_agent": "",
             }
 
-            yield {
-                "event": "tool_result",
-                "data": json.dumps({
-                    "tool": "search_knowledge_base",
-                    "result": {"documents_found": 3},
-                }),
-            }
+            # Run the agent graph and stream each node's output
+            final_response = ""
+            async for event in agent_graph.astream(initial_state):
+                for node_name, node_output in event.items():
+                    # Stream agent messages as tokens
+                    if "messages" in node_output:
+                        for msg in node_output["messages"]:
+                            content = msg.content if hasattr(msg, "content") else str(msg)
+                            if content:
+                                yield {
+                                    "event": "token",
+                                    "data": json.dumps({"content": f"**[{node_name.upper()}]**\n{content}\n\n", "done": False}),
+                                }
 
-            # Stream response tokens
-            response_text = (
-                "Based on my analysis of the connected systems and knowledge base, "
-                "here is what I found regarding your query."
-            )
-            words = response_text.split()
-            for i, word in enumerate(words):
-                yield {
-                    "event": "token",
-                    "data": json.dumps({
-                        "content": word + " ",
-                        "done": i == len(words) - 1,
-                    }),
-                }
+                    # Track tool calls
+                    if "step_results" in node_output:
+                        for result in node_output.get("step_results", []):
+                            yield {
+                                "event": "tool_result",
+                                "data": json.dumps({
+                                    "tool": result.get("tool", "unknown"),
+                                    "result": result.get("data", {}),
+                                }),
+                            }
+
+                    # Capture final response
+                    if "final_response" in node_output and node_output["final_response"]:
+                        final_response = node_output["final_response"]
 
             # Done
             yield {
                 "event": "done",
                 "data": json.dumps({
                     "message_id": str(uuid.uuid4()),
-                    "model": "gpt-4o",
-                    "tokens_used": 150,
-                    "cost_usd": 0.0045,
+                    "model": "aegis-agent-graph",
+                    "tokens_used": 0,
+                    "cost_usd": 0.0,
                 }),
             }
 
