@@ -30,6 +30,7 @@ from app.core.middleware import (
     CorrelationIdMiddleware,
     RateLimitMiddleware,
     RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
 )
 
 logger = get_logger(__name__)
@@ -121,10 +122,13 @@ def create_app() -> FastAPI:
     # 2. Correlation ID — injects trace context for all downstream middleware
     app.add_middleware(CorrelationIdMiddleware)
 
-    # 3. Rate limiting — protects against abuse before request processing
+    # 3. Security Headers — enforces SOC 2 headers on responses
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    # 4. Rate limiting — protects against abuse before request processing
     app.add_middleware(RateLimitMiddleware)
 
-    # 4. Request logging — logs after completion with latency
+    # 5. Request logging — logs after completion with latency
     app.add_middleware(RequestLoggingMiddleware)
 
     # 5. Prometheus metrics middleware

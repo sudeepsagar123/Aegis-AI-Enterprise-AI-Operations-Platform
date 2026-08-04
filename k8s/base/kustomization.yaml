@@ -15,6 +15,7 @@ resources:
   - frontend-service.yaml
   - worker-deployment.yaml
   - ingress.yaml
+  - hpa.yaml
 
 configMapGenerator:
   - name: aegis-config

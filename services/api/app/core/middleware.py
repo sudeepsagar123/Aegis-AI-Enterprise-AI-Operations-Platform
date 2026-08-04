@@ -163,3 +163,33 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         response.headers["X-Request-Duration-Ms"] = f"{duration_ms:.2f}"
         return response
+
+
+# ── Security Headers Middleware ─────────────────────────────────────────────
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Enforces enterprise security headers on all HTTP responses for SOC 2 compliance.
+
+    Headers set:
+        - X-Frame-Options: DENY (Prevents clickjacking)
+        - X-Content-Type-Options: nosniff (Prevents MIME sniffing)
+        - X-XSS-Protection: 1; mode=block (Legacy XSS protection)
+        - Strict-Transport-Security: max-age=31536000; includeSubDomains (Enforces HSTS)
+        - Referrer-Policy: strict-origin-when-cross-origin
+        - Permissions-Policy: camera=(), microphone=(), geolocation=()
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
