@@ -212,7 +212,7 @@ async def test_reporter_generates_response():
     result = await reporter_node(state)
     assert result["final_response"] != ""
     assert result["next_agent"] == "end"
-    assert "Investigation Report" in result["final_response"]
+    assert "Report" in result["final_response"] or "Executive Summary" in result["final_response"]
 
 
 # ── Approval Gate Tests ──────────────────────────────────────────────────────

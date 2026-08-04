@@ -283,7 +283,7 @@ async def executor_node(state: OrchestratorState) -> dict:
     logger.info("executor_running_step", step=current_step, action=step["action"], tool=step.get("tool"))
 
     # Check if approval is needed
-    if step.get("requires_approval"):
+    if step.get("requires_approval") and state.get("approval_decision") != "approved":
         return {
             "needs_approval": True,
             "next_agent": "approval_gate",
@@ -321,6 +321,7 @@ async def executor_node(state: OrchestratorState) -> dict:
     return {
         "step_results": [*state.get("step_results", []), result],
         "current_step": current_step + 1,
+        "approval_decision": None,
         "next_agent": "reviewer",
         "messages": [AIMessage(content=f"✅ Step {current_step + 1} completed: {step['description']}\n\n{execution_summary}")],
     }
