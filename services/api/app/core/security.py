@@ -196,11 +196,6 @@ async def get_current_user(
     """
     FastAPI dependency that extracts and validates the current user
     from the Authorization header.
-
-    Usage:
-        @router.get("/protected")
-        async def protected(user: TokenPayload = Depends(get_current_user)):
-            ...
     """
     if credentials is None:
         raise HTTPException(
