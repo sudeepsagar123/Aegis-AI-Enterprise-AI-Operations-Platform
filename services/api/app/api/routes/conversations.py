@@ -142,12 +142,24 @@ async def send_message(
         content=request.content,
     )
 
+    # Load past conversation history
+    from langchain_core.messages import HumanMessage as HMsg, AIMessage as AMsg
+    past_messages = await msg_repo.list_for_conversation(conversation_id)
+    langchain_messages = []
+    for pm in past_messages:
+        if pm.role == "user":
+            langchain_messages.append(HMsg(content=pm.content))
+        elif pm.role == "assistant":
+            langchain_messages.append(AMsg(content=pm.content))
+
+    if not langchain_messages:
+        langchain_messages = [HMsg(content=request.content)]
+
     # Invoke the LangGraph agent pipeline
     from app.agents.orchestrator import agent_graph, OrchestratorState
-    from langchain_core.messages import HumanMessage as HMsg
 
     initial_state: OrchestratorState = {
-        "messages": [HMsg(content=request.content)],
+        "messages": langchain_messages,
         "plan": [],
         "current_step": 0,
         "step_results": [],
@@ -165,12 +177,30 @@ async def send_message(
     # Run the full agent graph
     final_state = await agent_graph.ainvoke(initial_state)
     agent_response = final_state.get("final_response", "Investigation complete. No additional findings.")
+    step_results = final_state.get("step_results", [])
+
+    # Extract dynamic executed tools for frontend badges
+    executed_tools = []
+    for sr in step_results:
+        t_name = sr.get("tool", "")
+        if t_name and t_name not in [t["name"] for t in executed_tools]:
+            executed_tools.append({"name": t_name, "status": "completed"})
+
+    if not executed_tools:
+        executed_tools = [
+            {"name": "planner", "status": "completed"},
+            {"name": "executor", "status": "completed"},
+            {"name": "reporter", "status": "completed"}
+        ]
+
+    tool_calls_payload = {"items": executed_tools}
 
     assistant_msg = await msg_repo.create(
         conversation_id=conversation_id,
         role="assistant",
         content=agent_response,
         model="aegis-agent-graph",
+        tool_calls=tool_calls_payload,
     )
 
     return MessageResponse(

@@ -457,16 +457,23 @@ export default function HomePage() {
 
       if (res.ok) {
         const data = await res.json();
+        let dynamicTools: ToolCall[] = [];
+        if (data.tool_calls && Array.isArray(data.tool_calls.items)) {
+          dynamicTools = data.tool_calls.items;
+        } else {
+          dynamicTools = [
+            { name: "planner", status: "completed" },
+            { name: "executor", status: "completed" },
+            { name: "reporter", status: "completed" },
+          ];
+        }
+
         const assistantMessage: Message = {
           id: data.id || `m-${Date.now() + 1}`,
           role: "assistant",
           content: data.content,
           timestamp: new Date(),
-          toolCalls: [
-            { name: "planner", status: "completed" },
-            { name: "executor", status: "completed" },
-            { name: "search_knowledge_base", status: "completed" },
-          ],
+          toolCalls: dynamicTools,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
@@ -521,8 +528,6 @@ export default function HomePage() {
         activeId={activeConversation}
         onSelect={(id) => {
           setActiveConversation(id);
-          if (id === CONV_1_ID) setMessages(DEFAULT_MESSAGES);
-          else setMessages([]);
         }}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
