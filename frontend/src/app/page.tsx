@@ -51,21 +51,25 @@ interface Conversation {
 
 // ── Demo Data ───────────────────────────────────────────────────────────────
 
+const CONV_1_ID = "11111111-1111-4111-a111-111111111111";
+const CONV_2_ID = "22222222-2222-4222-a222-222222222222";
+const CONV_3_ID = "33333333-3333-4333-a333-333333333333";
+
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
-    id: "1",
+    id: CONV_1_ID,
     title: "Investigate Salesforce sync failures",
     updatedAt: new Date(),
-    messageCount: 12,
+    messageCount: 2,
   },
   {
-    id: "2",
+    id: CONV_2_ID,
     title: "Q3 revenue anomaly analysis",
     updatedAt: new Date(Date.now() - 3600000),
     messageCount: 8,
   },
   {
-    id: "3",
+    id: CONV_3_ID,
     title: "Deploy rollback — API latency spike",
     updatedAt: new Date(Date.now() - 86400000),
     messageCount: 24,
@@ -147,6 +151,7 @@ function Sidebar({
           type="button"
           onClick={onToggle}
           className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
             <PanelLeft className="w-4 h-4" />
@@ -289,7 +294,7 @@ function ChatMessage({ message }: { message: Message }) {
           }`}
         >
           {isUser ? (
-            <p className="text-sm leading-relaxed">{message.content}</p>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
           ) : (
             <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed space-y-2">
               {message.content.split("\n").map((line, i) => {
@@ -364,7 +369,7 @@ export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>(DEFAULT_MESSAGES);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [activeConversation, setActiveConversation] = useState("1");
+  const [activeConversation, setActiveConversation] = useState(CONV_1_ID);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -373,6 +378,12 @@ export default function HomePage() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      inputRef.current?.focus();
+    }
+  }, [isMounted, activeConversation]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -390,7 +401,9 @@ export default function HomePage() {
   }
 
   const handleNewChat = () => {
-    const newId = `conv-${Date.now()}`;
+    const newId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : "10000000-0000-4000-8000-" + Date.now().toString(16).padStart(12, "0");
     const newConv: Conversation = {
       id: newId,
       title: "New Investigation",
@@ -400,13 +413,13 @@ export default function HomePage() {
     setConversations([newConv, ...conversations]);
     setActiveConversation(newId);
     setMessages([]);
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const processQuery = async (queryText: string) => {
+    if (!queryText.trim() || isLoading) return;
 
-    const userQuery = input.trim();
+    const userQuery = queryText.trim();
     setInput("");
 
     const userMessage: Message = {
@@ -419,20 +432,21 @@ export default function HomePage() {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Update active conversation title if it's new
+    // Update active conversation title and message count if new
     setConversations((prev) =>
-      prev.map((c) =>
-        c.id === activeConversation && c.title === "New Investigation"
-          ? { ...c, title: userQuery.substring(0, 32) + "..." }
-          : c
-      )
+      prev.map((c) => {
+        if (c.id === activeConversation) {
+          const updatedTitle = c.title === "New Investigation" ? userQuery.substring(0, 32) + "..." : c.title;
+          return { ...c, title: updatedTitle, messageCount: c.messageCount + 1 };
+        }
+        return c;
+      })
     );
 
     try {
-      // Call backend FastAPI endpoint (dev-mode auto-auth handles credentials)
-      const convUuid = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+      // Call backend FastAPI endpoint with active valid UUID
       const res = await fetch(
-        `http://localhost:8000/api/v1/conversations/${convUuid}/messages`,
+        `http://localhost:8000/api/v1/conversations/${activeConversation}/messages`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -474,13 +488,19 @@ export default function HomePage() {
       setMessages((prev) => [...prev, assistantMessage]);
     } finally {
       setIsLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
+  };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    processQuery(input);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e as unknown as FormEvent);
+      processQuery(input);
     }
   };
 
@@ -500,7 +520,7 @@ export default function HomePage() {
         activeId={activeConversation}
         onSelect={(id) => {
           setActiveConversation(id);
-          if (id === "1") setMessages(DEFAULT_MESSAGES);
+          if (id === CONV_1_ID) setMessages(DEFAULT_MESSAGES);
           else setMessages([]);
         }}
         collapsed={sidebarCollapsed}
@@ -557,9 +577,11 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setInput("Investigate high CPU utilization and gateway timeouts on production cluster us-east-1");
+                      const sampleQuery = "Investigate high CPU utilization and gateway timeouts on production cluster us-east-1";
+                      setInput(sampleQuery);
+                      processQuery(sampleQuery);
                     }}
-                    className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary/50 text-xs transition-all"
+                    className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary/50 text-xs transition-all cursor-pointer"
                   >
                     🔍 <strong>Cluster Outage</strong>
                     <p className="text-[11px] text-muted-foreground mt-1">Investigate high CPU &amp; 504 gateway timeouts</p>
@@ -567,9 +589,11 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setInput("Analyze recent GitHub pull requests for database query performance regressions");
+                      const sampleQuery = "Analyze recent GitHub pull requests for database query performance regressions";
+                      setInput(sampleQuery);
+                      processQuery(sampleQuery);
                     }}
-                    className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary/50 text-xs transition-all"
+                    className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary/50 text-xs transition-all cursor-pointer"
                   >
                     ⚡ <strong>Code Audit</strong>
                     <p className="text-[11px] text-muted-foreground mt-1">Check recent commits for query performance</p>
@@ -608,7 +632,7 @@ export default function HomePage() {
                   <button
                     type="submit"
                     disabled={!input.trim() || isLoading}
-                    className="p-2 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-white"
+                    className="p-2 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-white cursor-pointer"
                   >
                     {isLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
