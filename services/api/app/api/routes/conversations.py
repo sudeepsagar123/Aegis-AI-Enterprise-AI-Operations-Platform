@@ -186,14 +186,7 @@ async def send_message(
         if t_name and t_name not in [t["name"] for t in executed_tools]:
             executed_tools.append({"name": t_name, "status": "completed"})
 
-    if not executed_tools:
-        executed_tools = [
-            {"name": "planner", "status": "completed"},
-            {"name": "executor", "status": "completed"},
-            {"name": "reporter", "status": "completed"}
-        ]
-
-    tool_calls_payload = {"items": executed_tools}
+    tool_calls_payload = {"items": executed_tools} if executed_tools else None
 
     assistant_msg = await msg_repo.create(
         conversation_id=conversation_id,

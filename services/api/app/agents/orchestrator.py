@@ -97,6 +97,16 @@ Guidance:
   4. **Recommendations**
 - For general questions, greetings, or conversational messages, respond naturally, warmly, and concisely without forcing incident headers."""
 
+SYSTEM_KEYWORDS = {
+    "log", "logs", "error", "errors", "fail", "failing", "failure", "sync", "bug",
+    "issue", "outage", "latency", "slow", "cpu", "memory", "ram", "db", "database",
+    "postgres", "postgresql", "sql", "k8s", "kubernetes", "pod", "pods", "cluster",
+    "deploy", "deployment", "jira", "slack", "salesforce", "github", "pr", "commit",
+    "ssl", "tls", "cert", "certificate", "audit", "investigate", "investigation",
+    "query", "pool", "exhaustion", "timeout", "504", "500", "429", "prometheus",
+    "grafana", "datadog", "pagerduty", "rollback", "revert"
+}
+
 GREETING_KEYWORDS = {
     "hi", "hello", "hey", "hi there", "hello aegis", "who are you",
     "what can you do", "help", "good morning", "good afternoon",
@@ -112,17 +122,57 @@ def _is_conversational_query(query: str) -> bool:
     cleaned = query.strip().lower().rstrip("!?. ")
     if not cleaned:
         return True
-    if cleaned in GREETING_KEYWORDS:
+
+    words = set(re.findall(r'\b\w+\b', cleaned))
+
+    # Explicit operational keywords mean this is a technical system investigation
+    if words.intersection(SYSTEM_KEYWORDS):
+        return False
+
+    if cleaned in GREETING_KEYWORDS or GREETING_REGEX.match(cleaned):
         return True
-    if GREETING_REGEX.match(cleaned):
-        return True
-    # Deduplicate consecutive characters (e.g. "hiiii" -> "hi", "hellooo" -> "helo")
+
     dedup = re.sub(r'(.)\1+', r'\1', cleaned)
     if dedup in GREETING_KEYWORDS or dedup in {"hi", "helo", "hey", "hallo"}:
         return True
-    if len(cleaned) <= 3 and cleaned not in {"db", "k8s", "cpu", "ram", "sql", "pr"}:
+
+    # Any non-technical phrase under 10 words is treated as conversational
+    if len(words) <= 10:
         return True
+
     return False
+
+
+def _generate_local_conversational_reply(query: str) -> str:
+    cleaned = query.strip().lower()
+
+    if any(k in cleaned for k in ["who", "identity", "name"]):
+        return (
+            "I am **Aegis AI**, an Enterprise AI Operations Copilot designed to automate incident triage, "
+            "infrastructure diagnostics, and system auditing across your DevOps stack."
+        )
+    elif any(k in cleaned for k in ["what", "do", "capability", "capabilities", "can you", "help"]):
+        return (
+            "Here is what I can do for you:\n\n"
+            "• **Incident Triage & Root Cause Analysis** — Inspect CPU spikes, memory leaks, and gateway timeouts\n"
+            "• **Database & Code Audits** — Analyze PostgreSQL connection pools, slow queries, and GitHub PRs\n"
+            "• **Enterprise Tool Integration** — Search Jira tickets, Slack incident alerts, and Salesforce connectors\n"
+            "• **Automated Remediation** — Execute approved runbooks and SQL index recommendations\n\n"
+            "Feel free to ask an operational question or try one of the sample investigations!"
+        )
+    elif "morning" in cleaned:
+        return "Good morning! ☀️ How can Aegis AI assist with your enterprise operations today?"
+    elif "afternoon" in cleaned:
+        return "Good afternoon! 👋 Ready to help you inspect incidents, system telemetry, or database health."
+    elif "evening" in cleaned:
+        return "Good evening! 🌙 Standing by for operational queries or system diagnostics."
+    elif any(k in cleaned for k in ["thank", "thanks"]):
+        return "You're very welcome! Let me know if you need any further system analysis or incident triage."
+    else:
+        return (
+            "Hello! 👋 I am **Aegis AI**, your Enterprise AI Operations Copilot.\n\n"
+            "How can I help you today? You can ask me to inspect cluster health, analyze database query performance, or investigate service errors."
+        )
 
 
 # ── LLM Helper ──────────────────────────────────────────────────────────────
@@ -194,14 +244,7 @@ async def planner_node(state: OrchestratorState) -> dict:
         )
         greeting_reply = await _invoke_llm(conversational_prompt, user_query)
         if not greeting_reply:
-            greeting_reply = (
-                "Hello! 👋 I am **Aegis AI**, your Enterprise AI Operations Copilot.\n\n"
-                "I can assist you with:\n"
-                "• **Incident Investigations** — Analyzing cluster outages, CPU spikes, and memory leaks\n"
-                "• **Database & Code Audits** — Inspecting slow queries and recent GitHub commits\n"
-                "• **Enterprise Integrations** — Searching Jira tickets, Slack alerts, and Salesforce syncs\n\n"
-                "How can I help you today? Feel free to ask a question or select a sample investigation!"
-            )
+            greeting_reply = _generate_local_conversational_reply(user_query)
         return {
             "plan": [],
             "current_step": 0,
