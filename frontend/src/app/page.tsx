@@ -584,7 +584,6 @@ export default function HomePage() {
                     type="button"
                     onClick={() => {
                       const sampleQuery = "Investigate high CPU utilization and gateway timeouts on production cluster us-east-1";
-                      setInput(sampleQuery);
                       processQuery(sampleQuery);
                     }}
                     className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary/50 text-xs transition-all cursor-pointer"
@@ -596,7 +595,6 @@ export default function HomePage() {
                     type="button"
                     onClick={() => {
                       const sampleQuery = "Analyze recent GitHub pull requests for database query performance regressions";
-                      setInput(sampleQuery);
                       processQuery(sampleQuery);
                     }}
                     className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary/50 text-xs transition-all cursor-pointer"
@@ -620,15 +618,19 @@ export default function HomePage() {
         <div className="px-6 pb-6">
           <div className="max-w-3xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
-              <div className="glass-panel glow-border overflow-hidden rounded-xl border border-border/80 bg-card/80">
+              <div
+                onClick={() => inputRef.current?.focus()}
+                className="glass-panel glow-border overflow-hidden rounded-xl border border-border/80 bg-card/80 cursor-text"
+              >
                 <textarea
                   ref={inputRef}
                   value={input}
+                  disabled={isLoading}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask Aegis AI to investigate, analyze, or take action..."
+                  placeholder={isLoading ? "Aegis AI is analyzing..." : "Ask Aegis AI to investigate, analyze, or take action..."}
                   rows={2}
-                  className="w-full resize-none bg-transparent px-4 py-3.5 pr-12 text-sm focus:outline-none placeholder:text-muted-foreground/50"
+                  className="w-full resize-none bg-transparent px-4 py-3.5 pr-12 text-sm focus:outline-none placeholder:text-muted-foreground/50 disabled:opacity-50"
                   style={{ minHeight: "56px", maxHeight: "150px" }}
                 />
                 <div className="flex items-center justify-between px-3 pb-2 pt-1 border-t border-border/40">
