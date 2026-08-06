@@ -110,8 +110,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        # Skip rate limiting for health checks and metrics
-        if request.url.path in ("/health", "/metrics", "/readiness"):
+        # Skip rate limiting for health checks, metrics, and local development mode
+        settings = get_settings()
+        if settings.app_env == "development" or request.url.path in ("/health", "/metrics", "/readiness"):
             return await call_next(request)
 
         client_ip = self._get_client_ip(request)

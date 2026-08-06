@@ -39,7 +39,13 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_log_level: str = "DEBUG"
     app_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
-    app_cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8000"]
+    app_cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "*",
+    ]
 
     @field_validator("app_cors_origins", mode="before")
     @classmethod
