@@ -86,16 +86,29 @@ Follow with a brief assessment."""
 
 REPORTER_SYSTEM_PROMPT = """You are the Reporter Agent in the Aegis AI operations platform.
 
-Your role is to synthesize all investigation results into a clear, actionable response.
-Structure your response with:
-1. **Executive Summary**
-2. **Key Findings**
-3. **Root Cause** (if applicable)
-4. **Recommendations**
-5. **Evidence & Citations**
+Your role is to synthesize investigation results into a clear, actionable response.
 
-Use data from the executed steps to support your conclusions.
-Always cite your sources. Be concise but thorough."""
+Guidance:
+- For incident investigations, outages, and technical queries, structure your response with:
+  1. **Executive Summary**
+  2. **Key Findings**
+  3. **Root Cause** (if applicable)
+  4. **Recommendations**
+- For general questions, greetings, or conversational messages, respond naturally, warmly, and concisely without forcing incident headers."""
+
+GREETING_KEYWORDS = {
+    "hi", "hello", "hey", "hi there", "hello aegis", "who are you",
+    "what can you do", "help", "good morning", "good afternoon",
+    "good evening", "thanks", "thank you", "yo", "greetings", "hallo"
+}
+
+def _is_conversational_query(query: str) -> bool:
+    cleaned = query.strip().lower().rstrip("!?.")
+    if cleaned in GREETING_KEYWORDS:
+        return True
+    if len(cleaned) <= 3 and cleaned not in {"db", "k8s", "cpu", "ram", "sql", "pr"}:
+        return True
+    return False
 
 
 # ── LLM Helper ──────────────────────────────────────────────────────────────
@@ -158,6 +171,33 @@ async def planner_node(state: OrchestratorState) -> dict:
 
     last_message = state["messages"][-1] if state["messages"] else None
     user_query = last_message.content if last_message else "General system health check"
+
+    # Direct conversational response for greetings / help
+    if _is_conversational_query(user_query):
+        conversational_prompt = (
+            "You are Aegis AI, an Enterprise AI Operations Copilot. "
+            "Respond warmly, naturally, and concisely to the user's greeting or question. "
+            "Briefly mention your capabilities (incident investigation, cluster diagnostics, database audits, Jira/Slack/GitHub integration) "
+            "and invite them to ask an operational question or try a sample investigation."
+        )
+        greeting_reply = await _invoke_llm(conversational_prompt, user_query)
+        if not greeting_reply:
+            greeting_reply = (
+                "Hello! 👋 I am **Aegis AI**, your Enterprise AI Operations Copilot.\n\n"
+                "I can assist you with:\n"
+                "• **Incident Investigations** — Analyzing cluster outages, CPU spikes, and memory leaks\n"
+                "• **Database & Code Audits** — Inspecting slow queries and recent GitHub commits\n"
+                "• **Enterprise Integrations** — Searching Jira tickets, Slack alerts, and Salesforce syncs\n\n"
+                "How can I help you today? Feel free to ask a question or select a sample investigation!"
+            )
+        return {
+            "plan": [],
+            "current_step": 0,
+            "next_agent": "reporter",
+            "step_results": [],
+            "final_response": greeting_reply,
+            "messages": [AIMessage(content=greeting_reply)],
+        }
 
     # Attempt real LLM call
     llm_response = await _invoke_llm(
@@ -425,6 +465,13 @@ async def reporter_node(state: OrchestratorState) -> dict:
     Reporter Agent: Synthesizes results into a final structured response.
     Makes a REAL LLM call for high-quality report generation.
     """
+    if state.get("final_response") and not state.get("step_results"):
+        return {
+            "final_response": state["final_response"],
+            "next_agent": "end",
+            "messages": [AIMessage(content=state["final_response"])],
+        }
+
     step_results = state.get("step_results", [])
     messages = state.get("messages", [])
 

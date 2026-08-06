@@ -45,6 +45,28 @@ async def test_planner_creates_plan():
 
 
 @pytest.mark.asyncio
+async def test_planner_handles_greetings():
+    state: OrchestratorState = {
+        "messages": [HumanMessage(content="hi")],
+        "plan": [],
+        "current_step": 0,
+        "step_results": [],
+        "needs_approval": False,
+        "approval_decision": None,
+        "context": [],
+        "entities": [],
+        "memories": [],
+        "final_response": "",
+        "metadata": {},
+        "error": None,
+        "next_agent": "",
+    }
+    result = await planner_node(state)
+    assert result["next_agent"] == "reporter"
+    assert "Aegis AI" in result["final_response"] or "Hello" in result["final_response"]
+
+
+@pytest.mark.asyncio
 async def test_planner_plan_has_required_fields():
     state: OrchestratorState = {
         "messages": [HumanMessage(content="Check database health")],
