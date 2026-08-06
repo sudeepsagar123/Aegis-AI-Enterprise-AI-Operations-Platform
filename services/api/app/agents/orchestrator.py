@@ -9,6 +9,7 @@ and falls back to structured local reasoning when no keys are available.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from typing import Annotated, Any
 
@@ -102,9 +103,22 @@ GREETING_KEYWORDS = {
     "good evening", "thanks", "thank you", "yo", "greetings", "hallo"
 }
 
+GREETING_REGEX = re.compile(
+    r"^(h+[i1]+|h+[e3]+l+o+|h+[e3]+y+|h+[a4]+l+o+|g+o+d+\s*(m+o+r+n+i+n+g|a+f+t+e+r+n+o+o+n|e+v+e+n+i+n+g)|t+h+a+n+k+s?|h+e+l+p|w+h+o+\s+a+r+e+\s+y+o+u|w+h+a+t+\s+c+a+n+\s+y+o+u+\s+d+o+)$",
+    re.IGNORECASE
+)
+
 def _is_conversational_query(query: str) -> bool:
-    cleaned = query.strip().lower().rstrip("!?.")
+    cleaned = query.strip().lower().rstrip("!?. ")
+    if not cleaned:
+        return True
     if cleaned in GREETING_KEYWORDS:
+        return True
+    if GREETING_REGEX.match(cleaned):
+        return True
+    # Deduplicate consecutive characters (e.g. "hiiii" -> "hi", "hellooo" -> "helo")
+    dedup = re.sub(r'(.)\1+', r'\1', cleaned)
+    if dedup in GREETING_KEYWORDS or dedup in {"hi", "helo", "hey", "hallo"}:
         return True
     if len(cleaned) <= 3 and cleaned not in {"db", "k8s", "cpu", "ram", "sql", "pr"}:
         return True
@@ -139,27 +153,24 @@ def _get_llm():
         return None
 
 
-async def _invoke_llm(system_prompt: str, user_content: str) -> str:
-    """
-    Invoke LLM with system + user message. Falls back to local reasoning if unavailable.
-    """
+async def _invoke_llm(system_prompt: str, user_content: str) -> str | None:
+    """Helper to invoke LLM safely with fallback."""
     llm = _get_llm()
-    if llm is None:
-        return ""  # Caller handles fallback
-
+    if not llm:
+        return None
     try:
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_content),
         ]
         response = await llm.ainvoke(messages)
-        return response.content
+        return str(response.content)
     except Exception as e:
-        logger.error("llm_invocation_failed", error=str(e))
-        return ""
+        logger.warning("llm_invocation_failed", error=str(e))
+        return None
 
 
-# ── Agent Node Functions ─────────────────────────────────────────────────────
+# ── Graph Node Implementations ──────────────────────────────────────────────
 
 
 async def planner_node(state: OrchestratorState) -> dict:
@@ -169,7 +180,8 @@ async def planner_node(state: OrchestratorState) -> dict:
     """
     logger.info("planner_executing", message_count=len(state["messages"]))
 
-    last_message = state["messages"][-1] if state["messages"] else None
+    user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
+    last_message = user_messages[-1] if user_messages else None
     user_query = last_message.content if last_message else "General system health check"
 
     # Direct conversational response for greetings / help
@@ -193,7 +205,7 @@ async def planner_node(state: OrchestratorState) -> dict:
         return {
             "plan": [],
             "current_step": 0,
-            "next_agent": "reporter",
+            "next_agent": "end",
             "step_results": [],
             "final_response": greeting_reply,
             "messages": [AIMessage(content=greeting_reply)],
@@ -498,9 +510,9 @@ async def reporter_node(state: OrchestratorState) -> dict:
 
     logger.info("reporter_generating", results_count=len(step_results))
 
-    # Get original query
+    # Get latest user query
     user_messages = [m for m in messages if isinstance(m, HumanMessage)]
-    original_query = user_messages[0].content if user_messages else "System investigation"
+    original_query = user_messages[-1].content if user_messages else "System investigation"
 
     # Build results summary for LLM
     results_text = "\n\n".join(

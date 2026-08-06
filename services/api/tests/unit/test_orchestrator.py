@@ -62,7 +62,7 @@ async def test_planner_handles_greetings():
         "next_agent": "",
     }
     result = await planner_node(state)
-    assert result["next_agent"] == "reporter"
+    assert result["next_agent"] == "end"
     assert "Aegis AI" in result["final_response"] or "Hello" in result["final_response"]
 
 
