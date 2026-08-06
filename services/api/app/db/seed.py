@@ -165,7 +165,7 @@ async def seed_database() -> None:
             users=3,
             incidents=len(incidents_data),
         )
-        print("\n✅ Database seeded successfully!")
+        print("\n[OK] Database seeded successfully!")
         print("   Organization: Acme Corp")
         print("   Admin:    admin@acme.com / Admin@123!")
         print("   Operator: operator@acme.com / Operator@123!")
