@@ -44,7 +44,8 @@ async def seed_database() -> None:
             return
 
         # ── Organization ─────────────────────────────────────────────────
-        org_id = uuid.uuid4()
+        # Deterministic IDs so dev JWT tokens can reference them reliably
+        org_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
         org = models.Organization(
             id=org_id,
             name="Acme Corp",
@@ -55,7 +56,7 @@ async def seed_database() -> None:
         session.add(org)
 
         # ── Users ────────────────────────────────────────────────────────
-        admin_id = uuid.uuid4()
+        admin_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
         admin = models.User(
             id=admin_id,
             org_id=org_id,

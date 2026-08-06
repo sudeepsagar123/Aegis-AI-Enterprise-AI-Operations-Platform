@@ -4,8 +4,16 @@ Aegis AI — Integration Tests for API Endpoints.
 
 from __future__ import annotations
 
+import os
+# Force production mode so auth-enforcement tests correctly expect 401
+os.environ["APP_ENV"] = "production"
+
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+# Clear cached settings so the env override takes effect
+from app.core.config import get_settings
+get_settings.cache_clear()
 
 from app.main import app
 

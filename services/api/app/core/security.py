@@ -196,8 +196,25 @@ async def get_current_user(
     """
     FastAPI dependency that extracts and validates the current user
     from the Authorization header.
+
+    In development mode, unauthenticated requests auto-resolve to the
+    seeded admin user so the frontend works without token management.
     """
     if credentials is None:
+        # Dev-mode auto-auth: return the seeded admin user
+        settings = get_settings()
+        if settings.app_env == "development":
+            all_permissions = [p.value for p in Permission]
+            return TokenPayload(
+                sub="00000000-0000-0000-0000-000000000002",
+                org_id="00000000-0000-0000-0000-000000000001",
+                role=Role.SUPER_ADMIN.value,
+                permissions=all_permissions,
+                exp=datetime.now(UTC) + timedelta(days=365),
+                iat=datetime.now(UTC),
+                jti=str(uuid.uuid4()),
+                token_type="access",
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",

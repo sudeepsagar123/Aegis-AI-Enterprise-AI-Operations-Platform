@@ -293,7 +293,7 @@ function ChatMessage({ message }: { message: Message }) {
           ) : (
             <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed space-y-2">
               {message.content.split("\n").map((line, i) => {
-                if (line.startsWith("## ") || line.startsWith("**") && line.endsWith("**")) {
+                if (line.startsWith("## ") || (line.startsWith("**") && line.endsWith("**"))) {
                   return (
                     <h3 key={i} className="font-semibold text-base text-blue-300 mt-2">
                       {line.replace(/^##\s*/, "").replace(/\*\*/g, "")}
@@ -416,7 +416,6 @@ export default function HomePage() {
       timestamp: new Date(),
     };
 
-    // Update messages locally
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
@@ -430,14 +429,13 @@ export default function HomePage() {
     );
 
     try {
-      // Call backend FastAPI endpoint
+      // Call backend FastAPI endpoint (dev-mode auto-auth handles credentials)
+      const convUuid = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
       const res = await fetch(
-        `http://localhost:8000/api/v1/conversations/3fa85f64-5717-4562-b3fc-2c963f66afa6/messages`,
+        `http://localhost:8000/api/v1/conversations/${convUuid}/messages`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: userQuery }),
         }
       );
@@ -457,31 +455,21 @@ export default function HomePage() {
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
-        // Fallback response if route fails or auth needed
         const errorData = await res.json().catch(() => ({}));
         const assistantMessage: Message = {
           id: `m-${Date.now() + 1}`,
           role: "assistant",
-          content: `### 🛡️ Aegis AI Multi-Agent Report\n\nI have processed your query: **"${userQuery}"**.\n\n` +
-            `**Status**: Executed via Groq LLaMA 3.3 Orchestrator.\n` +
-            `**Details**: ${errorData.detail || "Investigation complete across system components."}`,
+          content: `### ⚠️ API Error (${res.status})\n\n${errorData.detail || "The backend returned an error. Check the server logs."}`,
           timestamp: new Date(),
-          toolCalls: [{ name: "search_knowledge_base", status: "completed" }],
         };
         setMessages((prev) => [...prev, assistantMessage]);
       }
-    } catch (err) {
-      // Network/local fallback
+    } catch {
       const assistantMessage: Message = {
         id: `m-${Date.now() + 1}`,
         role: "assistant",
-        content: `### 🛡️ Aegis AI Multi-Agent Report\n\n**Query**: ${userQuery}\n\n` +
-          `**Analysis**: LangGraph pipeline initiated. Verified cluster metrics, database connections, and system audit logs. All operational guards active.`,
+        content: "### ⚠️ Connection Error\n\nCould not reach the backend at `http://localhost:8000`.\n\nMake sure the API server is running:\n```\npython run_demo_server.py\n```",
         timestamp: new Date(),
-        toolCalls: [
-          { name: "planner", status: "completed" },
-          { name: "executor", status: "completed" },
-        ],
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } finally {
@@ -492,7 +480,7 @@ export default function HomePage() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      handleSubmit(e as unknown as FormEvent);
     }
   };
 
@@ -526,7 +514,7 @@ export default function HomePage() {
         <header className="flex items-center justify-between px-6 py-3 border-b border-border bg-card/30 backdrop-blur-sm">
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-sm font-semibold truncate">
-              {activeConvObj ? activeConvObj.title : "Investigate Salesforce sync failures"}
+              {activeConvObj ? activeConvObj.title : "Aegis AI Agent Workspace"}
             </h1>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               Active
@@ -574,7 +562,7 @@ export default function HomePage() {
                     className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-secondary/50 text-xs transition-all"
                   >
                     🔍 <strong>Cluster Outage</strong>
-                    <p className="text-[11px] text-muted-foreground mt-1">Investigate high CPU & 504 gateway timeouts</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Investigate high CPU &amp; 504 gateway timeouts</p>
                   </button>
                   <button
                     type="button"

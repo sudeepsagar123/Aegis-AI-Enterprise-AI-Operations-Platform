@@ -127,7 +127,13 @@ async def send_message(
 
     conv = await conv_repo.get_by_id(conversation_id)
     if not conv:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+        conv = await conv_repo.create(
+            id=conversation_id,
+            user_id=uuid.UUID(user.sub),
+            org_id=uuid.UUID(user.org_id),
+            title=request.content[:30] if request.content else "Interactive Agent Chat",
+            status="active",
+        )
 
     # Store user message
     user_msg = await msg_repo.create(
